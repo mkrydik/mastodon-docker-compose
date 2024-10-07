@@ -1,0 +1,82 @@
+version: '3'
+
+services:
+  db:
+    restart: always
+    image: postgres:16
+    shm_size: 256mb
+    networks:
+      - internal_network
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+    volumes:
+      - ./postgres16:/var/lib/postgresql/data
+    environment:
+      - 'POSTGRES_HOST_AUTH_METHOD=trust'
+  
+  valkey:
+    restart: always
+    image: valkey/valkey:8
+    networks:
+      - internal_network
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+    volumes:
+      - ./valkey:/data
+  
+  web:
+    image: ghcr.io/mastodon/mastodon:v4.2.13
+    restart: always
+    env_file: .env.production
+    command: bundle exec puma -C config/puma.rb
+    networks:
+      - external_network
+      - internal_network
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q --spider --proxy=off localhost:3000/health || exit 1']
+    ports:
+      - '0.0.0.0:3000:3000'
+      - '[::1]:3000:3000'
+    depends_on:
+      - db
+      - valkey
+    volumes:
+      - ./public/system:/mastodon/public/system
+  
+  streaming:
+    image: ghcr.io/mastodon/mastodon:v4.2.13
+    restart: always
+    env_file: .env.production
+    command: node ./streaming
+    networks:
+      - external_network
+      - internal_network
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q --spider --proxy=off localhost:4000/api/v1/streaming/health || exit 1']
+    ports:
+      - '0.0.0.0:4000:4000'
+      - '[::1]:4000:4000'
+    depends_on:
+      - db
+      - valkey
+  
+  sidekiq:
+    image: ghcr.io/mastodon/mastodon:v4.2.13
+    restart: always
+    env_file: .env.production
+    command: bundle exec sidekiq
+    depends_on:
+      - db
+      - valkey
+    networks:
+      - external_network
+      - internal_network
+    volumes:
+      - ./public/system:/mastodon/public/system
+    healthcheck:
+      test: ['CMD-SHELL', "ps aux | grep '[s]idekiq\ 6' || false"]
+
+networks:
+  external_network:
+  internal_network:
+    internal: true
