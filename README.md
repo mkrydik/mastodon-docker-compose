@@ -65,7 +65,7 @@ example.com.     0       IN      A       000.000.000.000
 $ ./certbot-auto certonly --webroot -w /var/www/html -d example.com -m example@gmail.com --agree-tos -n
 ```
 
-- <example.com.conf>
+- `example.com.conf`
 
 ## Launch Docker Compose
 
